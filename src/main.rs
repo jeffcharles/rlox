@@ -12,7 +12,7 @@ use std::{
 };
 
 use chunk::{Chunk, OpCode};
-use vm::{InterpretResult, VM};
+use vm::InterpretResult;
 
 #[macro_use]
 extern crate num_derive;
@@ -34,7 +34,7 @@ fn repl() {
         print!("> ");
 
         if let Some(Ok(line)) = io::stdin().lock().lines().next() {
-            let _ = VM::interpret(&line);
+            let _ = vm::interpret(&line);
         } else {
             println!("");
             break;
@@ -57,7 +57,7 @@ fn run_file(path: &str) {
         process::exit(74);
     });
 
-    let result = VM::interpret(source);
+    let result = vm::interpret(source);
     match result {
         InterpretResult::CompileError => process::exit(65),
         InterpretResult::RuntimeError => process::exit(70),

@@ -1,5 +1,5 @@
 use crate::value::Value;
-use crate::{Chunk, OpCode};
+use crate::{compiler, Chunk, OpCode};
 
 const STACK_MAX: usize = 256;
 
@@ -32,11 +32,6 @@ impl<'a> VM<'a> {
             stack: [Value::default(); STACK_MAX],
             stack_top: 0,
         }
-    }
-
-    pub fn interpret(source: &str) -> InterpretResult {
-        todo!();
-        InterpretResult::Ok
     }
 
     pub fn run(&mut self) -> InterpretResult {
@@ -106,5 +101,20 @@ impl<'a> VM<'a> {
     fn pop(&mut self) -> Value {
         self.stack_top -= 1;
         self.stack[self.stack_top]
+    }
+}
+
+pub fn interpret(source: &str) -> InterpretResult {
+    match compiler::compile(source) {
+        Err(_) => return InterpretResult::CompileError,
+        Ok(chunk) => {
+            let mut vm = VM {
+                chunk: &chunk,
+                ip: 0,
+                stack: [Value::default(); STACK_MAX],
+                stack_top: 0,
+            };
+            vm.run()
+        }
     }
 }

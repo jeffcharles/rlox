@@ -1,11 +1,12 @@
+use std::str::Chars;
+
 pub struct Scanner<'a> {
-    source: &'a str,
-    start: usize,
+    start: Chars<'a>,
     current: usize,
     line: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -59,7 +60,7 @@ impl<'a> Token<'a> {
     pub fn new(ty: TokenType, scanner: &'a Scanner) -> Token<'a> {
         Token {
             ty,
-            start: &scanner.source[scanner.start..scanner.current],
+            start: &scanner.start.as_str()[..scanner.current + 1],
             line: scanner.line,
         }
     }
@@ -76,15 +77,15 @@ impl<'a> Token<'a> {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Scanner<'a> {
         Scanner {
-            source,
-            start: 0,
+            start: source.chars(),
             current: 0,
             line: 1,
         }
     }
 
     pub fn scan_token(&mut self) -> Token {
-        self.start = self.current;
+        self.start = self.start.as_str()[self.current..].chars();
+        self.current = 0;
 
         if self.is_at_end() {
             return Token::new(TokenType::EOF, self);
@@ -157,7 +158,10 @@ impl<'a> Scanner<'a> {
     }
 
     fn advance(&mut self) -> char {
-        let (i, c) = self.source[self.current..].char_indices().next().unwrap();
+        let (i, c) = self.start.as_str()[self.current..]
+            .char_indices()
+            .next()
+            .unwrap();
         self.current += i;
         c
     }
@@ -169,12 +173,16 @@ impl<'a> Scanner<'a> {
         if self.peek() != expected {
             return false;
         }
-        self.current += 1;
+        let (i, _) = self.start.as_str()[self.current..]
+            .char_indices()
+            .next()
+            .unwrap();
+        self.current += i;
         true
     }
 
     fn peek(&self) -> char {
-        self.source[self.current..].chars().next().unwrap()
+        self.start.as_str()[self.current..].chars().next().unwrap()
     }
 
     fn skip_whitespace(&mut self) {
@@ -201,7 +209,7 @@ impl<'a> Scanner<'a> {
         if self.is_at_end() {
             return '\0';
         }
-        let mut chars = self.source[self.current..].chars();
+        let mut chars = self.start.as_str()[self.current..].chars();
         chars.next().unwrap();
         chars.next().unwrap()
     }
@@ -257,7 +265,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn identifier_type(&self) -> TokenType {
-        match &self.source[self.start..self.current + 1] {
+        match &self.start.as_str()[..self.current + 1] {
             "and" => TokenType::And,
             "class" => TokenType::Class,
             "else" => TokenType::Else,
