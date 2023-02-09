@@ -84,6 +84,8 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn scan_token(&mut self) -> Token {
+        self.start = self.current;
+
         if self.is_at_end() {
             return Token::new(TokenType::EOF, self);
         }
@@ -97,50 +99,50 @@ impl<'a> Scanner<'a> {
         }
 
         match c {
-            "(" => return self.make_token(TokenType::LeftParen),
-            ")" => return self.make_token(TokenType::RightParen),
-            "{" => return self.make_token(TokenType::LeftBrace),
-            "}" => return self.make_token(TokenType::RightBrace),
-            ";" => return self.make_token(TokenType::Semicolon),
-            "," => return self.make_token(TokenType::Comma),
-            "." => return self.make_token(TokenType::Dot),
-            "-" => return self.make_token(TokenType::Minus),
-            "+" => return self.make_token(TokenType::Plus),
-            "/" => return self.make_token(TokenType::Slash),
-            "*" => return self.make_token(TokenType::Star),
-            "!" => {
-                let ty = if self.matches("=") {
+            '(' => return self.make_token(TokenType::LeftParen),
+            ')' => return self.make_token(TokenType::RightParen),
+            '{' => return self.make_token(TokenType::LeftBrace),
+            '}' => return self.make_token(TokenType::RightBrace),
+            ';' => return self.make_token(TokenType::Semicolon),
+            ',' => return self.make_token(TokenType::Comma),
+            '.' => return self.make_token(TokenType::Dot),
+            '-' => return self.make_token(TokenType::Minus),
+            '+' => return self.make_token(TokenType::Plus),
+            '/' => return self.make_token(TokenType::Slash),
+            '*' => return self.make_token(TokenType::Star),
+            '!' => {
+                let ty = if self.matches('=') {
                     TokenType::BangEqual
                 } else {
                     TokenType::Bang
                 };
                 return self.make_token(ty);
             }
-            "=" => {
-                let ty = if self.matches("=") {
+            '=' => {
+                let ty = if self.matches('=') {
                     TokenType::EqualEqual
                 } else {
                     TokenType::Equal
                 };
                 return self.make_token(ty);
             }
-            "<" => {
-                let ty = if self.matches("=") {
+            '<' => {
+                let ty = if self.matches('=') {
                     TokenType::LessEqual
                 } else {
                     TokenType::Less
                 };
                 return self.make_token(ty);
             }
-            ">" => {
-                let ty = if self.matches(">") {
+            '>' => {
+                let ty = if self.matches('=') {
                     TokenType::GreaterEqual
                 } else {
                     TokenType::Greater
                 };
                 return self.make_token(ty);
             }
-            "\"" => return self.string(),
+            '\"' => return self.string(),
             _ => (),
         }
         Token::error("Unexepcted character.", self)
@@ -151,15 +153,16 @@ impl<'a> Scanner<'a> {
     }
 
     fn is_at_end(&self) -> bool {
-        self.peek() == "\0"
+        self.peek() == '\0'
     }
 
-    fn advance(&mut self) -> &str {
-        self.current += 1;
-        &self.source[self.current - 1..self.current]
+    fn advance(&mut self) -> char {
+        let (i, c) = self.source[self.current..].char_indices().next().unwrap();
+        self.current += i;
+        c
     }
 
-    fn matches(&mut self, expected: &str) -> bool {
+    fn matches(&mut self, expected: char) -> bool {
         if self.is_at_end() {
             return false;
         }
@@ -170,22 +173,22 @@ impl<'a> Scanner<'a> {
         true
     }
 
-    fn peek(&self) -> &str {
-        &self.source[self.current..self.current + 1]
+    fn peek(&self) -> char {
+        self.source[self.current..].chars().next().unwrap()
     }
 
     fn skip_whitespace(&mut self) {
         loop {
             match self.peek() {
-                " " | "\r" | "\t" => {
+                ' ' | '\r' | '\t' => {
                     self.advance();
                 }
-                "\n" => {
+                '\n' => {
                     self.line += 1;
                     self.advance();
                 }
-                "/" if self.peek_next() == "/" => {
-                    while self.peek() != "\n" && !self.is_at_end() {
+                '/' if self.peek_next() == '/' => {
+                    while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                 }
@@ -194,16 +197,18 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn peek_next(&self) -> &str {
+    fn peek_next(&self) -> char {
         if self.is_at_end() {
-            return "\0";
+            return '\0';
         }
-        &self.source[self.current + 1..self.current + 2]
+        let mut chars = self.source[self.current..].chars();
+        chars.next().unwrap();
+        chars.next().unwrap()
     }
 
     fn string(&mut self) -> Token {
-        while self.peek() != "\"" && !self.is_at_end() {
-            if self.peek() == "\n" {
+        while self.peek() != '"' && !self.is_at_end() {
+            if self.peek() == '\n' {
                 self.line += 1;
                 self.advance();
             }
@@ -218,9 +223,8 @@ impl<'a> Scanner<'a> {
         self.make_token(TokenType::String)
     }
 
-    fn is_digit(c: &str) -> bool {
-        let char = c.chars().next().unwrap();
-        char.is_digit(10)
+    fn is_digit(c: char) -> bool {
+        c.is_digit(10)
     }
 
     fn number(&mut self) -> Token {
@@ -229,7 +233,7 @@ impl<'a> Scanner<'a> {
         }
 
         // Look for a fractional part
-        if self.peek() == "." && Self::is_digit(self.peek_next()) {
+        if self.peek() == '.' && Self::is_digit(self.peek_next()) {
             // Consume the "."
             self.advance();
 
@@ -241,9 +245,8 @@ impl<'a> Scanner<'a> {
         self.make_token(TokenType::Number)
     }
 
-    fn is_alpha(c: &str) -> bool {
-        let char = c.chars().next().unwrap();
-        char.is_alphabetic() || char == '_'
+    fn is_alpha(c: char) -> bool {
+        c.is_alphabetic() || c == '_'
     }
 
     fn identifier(&mut self) -> Token {
