@@ -1,3 +1,5 @@
+use core::fmt;
+
 use crate::value::Value;
 use crate::{compiler, Chunk, OpCode};
 
@@ -22,6 +24,8 @@ enum BinaryOp {
     Subtract,
     Multiply,
     Divide,
+    GreaterThan,
+    LessThan,
 }
 
 impl<'a> VM<'a> {
@@ -29,7 +33,7 @@ impl<'a> VM<'a> {
         VM {
             chunk,
             ip: 0,
-            stack: [Value::default(); STACK_MAX],
+            stack: [Value::Nil; STACK_MAX],
             stack_top: 0,
         }
     }
@@ -51,18 +55,62 @@ impl<'a> VM<'a> {
                     println!("{val}");
                     return InterpretResult::Ok;
                 }
-                OpCode::Add => self.binary_op(BinaryOp::Add),
-                OpCode::Subtract => self.binary_op(BinaryOp::Subtract),
-                OpCode::Multiply => self.binary_op(BinaryOp::Multiply),
-                OpCode::Divide => self.binary_op(BinaryOp::Divide),
-                OpCode::Negate => {
-                    let val = self.pop();
-                    self.push(-val);
+                OpCode::Add => match self.binary_op(BinaryOp::Add) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
+                OpCode::Subtract => match self.binary_op(BinaryOp::Subtract) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
+                OpCode::Multiply => match self.binary_op(BinaryOp::Multiply) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
+                OpCode::Divide => match self.binary_op(BinaryOp::Divide) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
+                OpCode::Not => {
+                    let v = self.pop();
+                    self.push(Value::Bool(Self::is_falsey(v)));
                 }
+                OpCode::Negate => match self.peek(0) {
+                    Value::Number(n) => {
+                        self.pop();
+                        self.push(Value::Number(-n));
+                    }
+                    _ => {
+                        self.runtime_error(format_args!("Operand must be a number."));
+                        return InterpretResult::RuntimeError;
+                    }
+                },
                 OpCode::Constant => {
                     let constant = self.read_constant();
                     self.push(constant);
                 }
+                OpCode::Nil => self.push(Value::Nil),
+                OpCode::True => self.push(Value::Bool(true)),
+                OpCode::False => self.push(Value::Bool(false)),
+                OpCode::Equal => {
+                    let b = self.pop();
+                    let a = self.pop();
+                    self.push(Value::Bool(a == b));
+                }
+                OpCode::Greater => match self.binary_op(BinaryOp::GreaterThan) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
+                OpCode::Less => match self.binary_op(BinaryOp::LessThan) {
+                    InterpretResult::CompileError => return InterpretResult::CompileError,
+                    InterpretResult::RuntimeError => return InterpretResult::RuntimeError,
+                    InterpretResult::Ok => (),
+                },
             }
         }
     }
@@ -81,16 +129,27 @@ impl<'a> VM<'a> {
     }
 
     #[inline(always)]
-    fn binary_op(&mut self, op: BinaryOp) {
-        let b = self.pop();
-        let a = self.pop();
-        let c = match op {
-            BinaryOp::Add => a + b,
-            BinaryOp::Divide => a / b,
-            BinaryOp::Multiply => a * b,
-            BinaryOp::Subtract => a - b,
-        };
-        self.push(c);
+    fn binary_op(&mut self, op: BinaryOp) -> InterpretResult {
+        match (self.peek(0), self.peek(1)) {
+            (Value::Number(a), Value::Number(b)) => {
+                self.pop();
+                self.pop();
+                let c = match op {
+                    BinaryOp::Add => Value::Number(a + b),
+                    BinaryOp::Divide => Value::Number(a / b),
+                    BinaryOp::Multiply => Value::Number(a * b),
+                    BinaryOp::Subtract => Value::Number(a - b),
+                    BinaryOp::GreaterThan => Value::Bool(a > b),
+                    BinaryOp::LessThan => Value::Bool(a < b),
+                };
+                self.push(c);
+                InterpretResult::Ok
+            }
+            _ => {
+                self.runtime_error(format_args!("Operands must be numbers."));
+                InterpretResult::RuntimeError
+            }
+        }
     }
 
     fn push(&mut self, value: Value) {
@@ -102,6 +161,31 @@ impl<'a> VM<'a> {
         self.stack_top -= 1;
         self.stack[self.stack_top]
     }
+
+    fn peek(&self, distance: usize) -> Value {
+        self.stack[self.stack_top - 1 - distance]
+    }
+
+    fn reset_stack(&mut self) {
+        self.stack_top = 0;
+    }
+
+    fn runtime_error(&mut self, args: fmt::Arguments) {
+        eprintln!("{args}");
+
+        let instruction = self.ip - 1;
+        let line = self.chunk.lines[instruction];
+        eprintln!("[line {line}] in script");
+        self.reset_stack();
+    }
+
+    fn is_falsey(value: Value) -> bool {
+        match value {
+            Value::Nil => true,
+            Value::Bool(false) => true,
+            _ => false,
+        }
+    }
 }
 
 pub fn interpret(source: &str) -> InterpretResult {
@@ -111,7 +195,7 @@ pub fn interpret(source: &str) -> InterpretResult {
             let mut vm = VM {
                 chunk: &chunk,
                 ip: 0,
-                stack: [Value::default(); STACK_MAX],
+                stack: [Value::Nil; STACK_MAX],
                 stack_top: 0,
             };
             vm.run()

@@ -5,10 +5,17 @@ use anyhow::{bail, Error, Result};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, FromPrimitive, ToPrimitive)]
 pub enum OpCode {
     Constant,
+    Nil,
+    True,
+    False,
+    Equal,
+    Greater,
+    Less,
     Add,
     Subtract,
     Multiply,
     Divide,
+    Not,
     Negate,
     Return,
 }
@@ -26,7 +33,7 @@ impl TryFrom<u8> for OpCode {
 
 pub struct Chunk {
     pub code: Vec<u8>,
-    lines: Vec<u32>,
+    pub lines: Vec<u32>,
     pub constants: Vec<Value>,
 }
 
@@ -44,9 +51,9 @@ impl Chunk {
         self.lines.push(line);
     }
 
-    pub fn add_constant(&mut self, value: Value) -> u8 {
+    pub fn add_constant(&mut self, value: Value) -> Result<u8> {
         self.constants.push(value);
-        <usize as TryInto<u8>>::try_into(self.constants.len()).unwrap() - 1
+        Ok(<usize as TryInto<u8>>::try_into(self.constants.len())? - 1)
     }
 
     pub fn disassemble(&self, name: &str) {
@@ -68,10 +75,17 @@ impl Chunk {
         let op_code: Result<OpCode> = instruction.try_into();
         match op_code {
             Ok(OpCode::Constant) => self.constant_instruction("Constant", offset),
+            Ok(OpCode::Nil) => self.simple_instruction("Nil", offset),
+            Ok(OpCode::True) => self.simple_instruction("True", offset),
+            Ok(OpCode::False) => self.simple_instruction("False", offset),
+            Ok(OpCode::Equal) => self.simple_instruction("Equal", offset),
+            Ok(OpCode::Greater) => self.simple_instruction("Greater", offset),
+            Ok(OpCode::Less) => self.simple_instruction("Less", offset),
             Ok(OpCode::Add) => self.simple_instruction("Add", offset),
             Ok(OpCode::Subtract) => self.simple_instruction("Subtract", offset),
             Ok(OpCode::Multiply) => self.simple_instruction("Multiply", offset),
             Ok(OpCode::Divide) => self.simple_instruction("Divide", offset),
+            Ok(OpCode::Not) => self.simple_instruction("Not", offset),
             Ok(OpCode::Negate) => self.simple_instruction("Negate", offset),
             Ok(OpCode::Return) => self.simple_instruction("Return", offset),
             Err(_) => {

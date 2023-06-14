@@ -4,10 +4,11 @@ mod scanner;
 mod value;
 mod vm;
 
+use anyhow::Result;
 use std::{
     env,
     fs::File,
-    io::{self, BufRead, Read},
+    io::{self, BufRead, Read, Write},
     process, str,
 };
 
@@ -20,8 +21,8 @@ extern crate num_derive;
 fn main() {
     let args: Vec<String> = env::args().collect();
     match &args[..] {
-        [] => repl(),
-        [path] => run_file(path),
+        [_] => repl().unwrap(),
+        [_, path] => run_file(path),
         _ => {
             eprintln!("Usage: rlox [path]");
             process::exit(64);
@@ -29,17 +30,23 @@ fn main() {
     }
 }
 
-fn repl() {
+fn repl() -> Result<()> {
     loop {
         print!("> ");
+        io::stdout().flush()?;
 
         if let Some(Ok(line)) = io::stdin().lock().lines().next() {
-            let _ = vm::interpret(&line);
+            match vm::interpret(&line) {
+                InterpretResult::CompileError => eprintln!("Compile error"),
+                InterpretResult::RuntimeError => eprintln!("Runtime error"),
+                InterpretResult::Ok => (),
+            }
         } else {
             println!("");
             break;
         }
     }
+    Ok(())
 }
 
 fn run_file(path: &str) {
