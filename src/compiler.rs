@@ -32,11 +32,11 @@ impl<'a> Parser<'a> {
         self.previous = mem::take(&mut self.current);
 
         loop {
-            self.current = self.scanner.scan_token();
+            self.current = self.scanner.next().unwrap();
             if self.current.ty != TokenType::Error {
                 break;
             }
-            self.error_at_current(self.current.start);
+            self.error_at_current(self.current.str);
         }
     }
 
@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
         match token.ty {
             TokenType::EOF => eprint!(" at end"),
             TokenType::Error => (),
-            _ => eprint!(" at '{}.{}", token.start.len(), token.start),
+            _ => eprint!(" at '{}'", token.str),
         }
 
         eprintln!(": {message}");
@@ -100,7 +100,7 @@ impl<'a> Parser<'a> {
     }
 
     fn number(&mut self) {
-        let value = self.previous.start.parse::<f64>().unwrap();
+        let value = self.previous.str.parse::<f64>().unwrap();
         self.emit_constant(Value::Number(value));
     }
 
@@ -137,7 +137,6 @@ impl<'a> Parser<'a> {
 
     fn parse_precedence(&mut self, precedence: Precedence) {
         self.advance();
-        eprintln!("{:?}", self.previous);
         let prefix_rule = self.get_rule(self.previous.ty).prefix;
         match prefix_rule {
             None => self.error("Expect expression."),
