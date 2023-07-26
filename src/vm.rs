@@ -1,4 +1,5 @@
 use core::fmt;
+use std::{array, mem};
 
 use crate::value::Value;
 use crate::{compiler, Chunk, OpCode};
@@ -33,7 +34,7 @@ impl<'a> VM<'a> {
         VM {
             chunk,
             ip: 0,
-            stack: [Value::Nil; STACK_MAX],
+            stack: array::from_fn(|_| Value::default()),
             stack_top: 0,
         }
     }
@@ -90,7 +91,7 @@ impl<'a> VM<'a> {
                     }
                 },
                 OpCode::Constant => {
-                    let constant = self.read_constant();
+                    let constant = self.read_constant().clone();
                     self.push(constant);
                 }
                 OpCode::Nil => self.push(Value::Nil),
@@ -123,14 +124,18 @@ impl<'a> VM<'a> {
     }
 
     #[inline(always)]
-    fn read_constant(&mut self) -> Value {
+    fn read_constant(&mut self) -> &Value {
         let index = self.read_byte();
-        self.chunk.constants[index as usize]
+        &self.chunk.constants[index as usize]
     }
 
     #[inline(always)]
     fn binary_op(&mut self, op: BinaryOp) -> InterpretResult {
         match (self.peek(0), self.peek(1)) {
+            (a @ _, b @ _) if a.is_string() && b.is_string() => {
+                self.concatenate();
+                InterpretResult::Ok
+            }
             (Value::Number(a), Value::Number(b)) => {
                 self.pop();
                 self.pop();
@@ -146,7 +151,7 @@ impl<'a> VM<'a> {
                 InterpretResult::Ok
             }
             _ => {
-                self.runtime_error(format_args!("Operands must be numbers."));
+                self.runtime_error(format_args!("Operands must be two numbers or two strings."));
                 InterpretResult::RuntimeError
             }
         }
@@ -158,15 +163,17 @@ impl<'a> VM<'a> {
     }
 
     fn pop(&mut self) -> Value {
+        let ret = mem::take(&mut self.stack[self.stack_top]);
         self.stack_top -= 1;
-        self.stack[self.stack_top]
+        ret
     }
 
     fn peek(&self, distance: usize) -> Value {
-        self.stack[self.stack_top - 1 - distance]
+        self.stack[self.stack_top - 1 - distance].clone()
     }
 
     fn reset_stack(&mut self) {
+        self.stack = array::from_fn(|_| Value::default());
         self.stack_top = 0;
     }
 
@@ -186,18 +193,23 @@ impl<'a> VM<'a> {
             _ => false,
         }
     }
+
+    fn concatenate(&mut self) {
+        let b_val = self.pop();
+        let a_val = self.pop();
+        let b = b_val.as_str().unwrap();
+        let a = a_val.as_str().unwrap();
+        let mut concatenated = String::from(a);
+        concatenated.push_str(b);
+        self.push(Value::from_string(concatenated));
+    }
 }
 
 pub fn interpret(source: &str) -> InterpretResult {
     match compiler::compile(source) {
         Err(_) => return InterpretResult::CompileError,
         Ok(chunk) => {
-            let mut vm = VM {
-                chunk: &chunk,
-                ip: 0,
-                stack: [Value::Nil; STACK_MAX],
-                stack_top: 0,
-            };
+            let mut vm = VM::new(&chunk);
             vm.run()
         }
     }

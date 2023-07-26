@@ -157,6 +157,7 @@ impl<'a> Parser<'a> {
             ParseFn::Binary => self.binary(),
             ParseFn::Number => self.number(),
             ParseFn::Literal => self.literal(),
+            ParseFn::String => self.string(),
         }
     }
 
@@ -186,6 +187,10 @@ impl<'a> Parser<'a> {
             TokenType::True => self.emit_byte(OpCode::True as u8),
             _ => unreachable!(),
         }
+    }
+
+    fn string(&mut self) {
+        self.emit_constant(Value::from_string(self.previous.str.to_string()))
     }
 
     fn get_rule(&mut self, token_type: TokenType) -> ParseRule {
@@ -291,7 +296,7 @@ impl<'a> Parser<'a> {
                 precedence: Precedence::None,
             },
             TokenType::String => ParseRule {
-                prefix: None,
+                prefix: Some(ParseFn::String),
                 infix: None,
                 precedence: Precedence::None,
             },
@@ -446,6 +451,7 @@ enum ParseFn {
     Binary,
     Number,
     Literal,
+    String,
 }
 
 struct ParseRule {
